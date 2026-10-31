@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101712" />
+    <title>Тихий час — магазин № 24</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="world">
+      <canvas id="scene" aria-label="Ночная прогулка по очень большому продуктовому магазину"></canvas>
+      <div class="vignette" aria-hidden="true"></div>
+      <div class="scanlines" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Тихий час, магазин номер 24">
+          <span class="brand-mark">24</span>
+          <span class="brand-copy"><b>ТИХИЙ ЧАС</b><small>ПРОДУКТОВЫЙ · КРУГЛОСУТОЧНО</small></span>
+        </a>
+        <div class="store-status"><span class="live-dot"></span><span>МАГАЗИН ОТКРЫТ</span><i></i><span>24 / 7</span></div>
+        <div class="top-note"><span class="top-note-label">СЕЙЧАС</span><span id="clock">03:17</span></div>
+      </header>
+
+      <section class="intro" id="intro">
+        <div class="eyebrow"><span class="eyebrow-line"></span> СМЕНА № 08 · НОЧНОЙ ЗАЛ</div>
+        <h1>Здесь всегда<br /><em>есть время.</em></h1>
+        <p>Бесконечные проходы, гул ламп и кассы, которые ждут последнего покупателя.</p>
+        <button class="enter-button" id="enter">
+          <span>Войти в магазин</span><span class="button-arrow">↗</span>
+        </button>
+        <div class="intro-hint"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span>чтобы осмотреться</span></div>
+      </section>
+
+      <div class="scene-caption" id="caption"><span class="caption-dot"></span> Между рядами кто-то оставил шарик.</div>
+      <div class="hud" id="hud">
+        <div class="hud-location"><span>ВЫ НАХОДИТЕСЬ</span><b>ОСНОВНОЙ ЗАЛ <i>·</i> РЯД 01</b></div>
+        <div class="crosshair" aria-hidden="true"><i></i><b></b></div>
+        <div class="hud-controls"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span>ИДТИ</span><span class="control-divider"></span><span class="mouse-icon">⌖</span><span>ОГЛЯДЕТЬСЯ</span></div>
+        <button id="leave" class="leave-button">Выйти <span>ESC</span></button>
+      </div>
+
+      <div class="loading" id="loading"><span class="loading-spinner"></span><span>ЗАГРУЖАЕМ НОЧНУЮ СМЕНУ</span></div>
+      <div class="webgpu-error" id="webgpuError" hidden>Для этой прогулки нужен браузер с поддержкой WebGPU.</div>
+      <footer class="footer"><span>ТИШЕ. ВЫ МОЖЕТЕ НЕ СПЕШИТЬ.</span><span>ПОСЛЕДНИЙ ЧЕК: 02:46</span></footer>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
