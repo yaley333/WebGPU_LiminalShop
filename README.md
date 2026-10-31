@@ -1,3 +1,3 @@
 Лиминальный магазин
 
-[Скриншот](screens/screen.png)
+![Скриншот](screens/screen.png)
