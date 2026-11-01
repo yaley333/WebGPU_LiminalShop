@@ -8,6 +8,9 @@ const hud = document.querySelector("#hud");
 const clockLabel = document.querySelector("#clock");
 const interactionHint = document.querySelector("#interactionHint");
 const interactionLabel = document.querySelector("#interactionLabel");
+const ambientMusic = document.querySelector("#ambientMusic");
+const musicToggle = document.querySelector("#musicToggle");
+ambientMusic.volume = 0.28;
 const vertexData = [];
 const reflectedVertexData = [];
 let captureReflection = false;
@@ -677,6 +680,44 @@ function toyClown(x, z, segments = 20, rings = 14) {
   sphere(0, 1.39, 0.01, 0.052, 0.052, 0.052, [0.96, 0.92, 0.8]);
 }
 
+function janitor(x, z) {
+  const uniform = [0.035, 0.075, 0.15];
+  const uniformLight = [0.075, 0.13, 0.23];
+  const skin = [0.73, 0.52, 0.38];
+  const hair = [0.22, 0.16, 0.12];
+
+  steelTube([x - 0.17, 1.06, z], [x - 0.19, 0.18, z + 0.08], 0.105, uniform, -0.85, 10);
+  steelTube([x + 0.15, 1.06, z], [x + 0.19, 0.18, z + 0.12], 0.105, uniform, -0.85, 10);
+  box(x - 0.19, 0.105, z + 0.16, 0.25, 0.15, 0.36, [0.12, 0.13, 0.14]);
+  box(x + 0.19, 0.105, z + 0.2, 0.25, 0.15, 0.36, [0.12, 0.13, 0.14]);
+
+  ellipsoid(x - 0.035, 1.45, z, 0.29, 0.42, 0.2, uniform, 0, false, 16, 12);
+  box(x - 0.035, 1.62, z + 0.13, 0.25, 0.19, 0.035, uniformLight);
+  box(x - 0.035, 1.66, z + 0.153, 0.055, 0.13, 0.018, [0.68, 0.78, 0.82]);
+
+  steelTube([x - 0.25, 1.67, z + 0.02], [x - 0.39, 1.37, z + 0.12], 0.085, uniformLight, -0.85, 10);
+  steelTube([x - 0.39, 1.37, z + 0.12], [x - 0.28, 1.14, z + 0.25], 0.07, uniformLight, -0.85, 10);
+  steelTube([x + 0.24, 1.67, z + 0.02], [x + 0.34, 1.45, z + 0.14], 0.085, uniformLight, -0.85, 10);
+  steelTube([x + 0.34, 1.45, z + 0.14], [x + 0.24, 1.29, z + 0.23], 0.07, uniformLight, -0.85, 10);
+  ellipsoid(x - 0.28, 1.13, z + 0.25, 0.065, 0.075, 0.06, skin, 0, false, 10, 8);
+  ellipsoid(x + 0.24, 1.28, z + 0.23, 0.065, 0.075, 0.06, skin, 0, false, 10, 8);
+
+  ellipsoid(x - 0.04, 2.03, z + 0.035, 0.17, 0.23, 0.16, skin, 0, false, 16, 12);
+  ellipsoid(x - 0.04, 2.19, z, 0.18, 0.09, 0.17, hair, 0, false, 14, 8);
+  ellipsoid(x - 0.195, 2.07, z + 0.015, 0.035, 0.1, 0.095, hair, 0, false, 10, 8);
+  ellipsoid(x + 0.115, 2.07, z + 0.015, 0.035, 0.1, 0.095, hair, 0, false, 10, 8);
+  for (const eyeX of [x - 0.095, x + 0.015]) {
+    ellipsoid(eyeX, 2.055, z + 0.18, 0.018, 0.018, 0.012, [0.08, 0.07, 0.065], 0, false, 8, 6);
+  }
+
+  steelTube([x + 0.24, 1.29, z + 0.25], [x - 0.1, 0.14, z + 0.48], 0.024, [0.54, 0.34, 0.18], -0.85, 10);
+  box(x - 0.1, 0.075, z + 0.48, 0.82, 0.075, 0.2, [0.32, 0.2, 0.12]);
+  for (let bristle = 0; bristle < 15; bristle += 1) {
+    const bristleX = x - 0.48 + bristle * 0.055;
+    steelTube([bristleX, 0.04, z + 0.48], [bristleX, 0.008, z + 0.48], 0.008, [0.13, 0.1, 0.07], -0.85, 5);
+  }
+}
+
 function makeScene() {
   vertexData.length = 0;
   reflectedVertexData.length = 0;
@@ -865,6 +906,8 @@ function makeScene() {
   toy.vertexEnd = vertexData.length;
   toy.reflectionStart = toyReflectionStart;
   toy.reflectionEnd = reflectedVertexData.length;
+  captureReflection = true;
+  janitor(1.7, -32);
   captureReflection = false;
   for (const [x, z, yaw] of [
     [-2.7, -8.5, 0.3],
@@ -1345,19 +1388,11 @@ async function start() {
     const fallbackAudioSources = new Map();
     const fallbackSoundSegments = {
       cart: [{ start: 0.33, end: 2.15 }],
-      set_setps: [
-        { start: 0, end: 0.2 }, { start: 0.88, end: 1.2 }, { start: 1.18, end: 1.5 },
-        { start: 1.76, end: 2.3 }, { start: 2.67, end: 2.95 }, { start: 3.6, end: 4.1 },
-        { start: 4.55, end: 4.85 }, { start: 5.5, end: 5.9 }, { start: 6.5, end: 6.8 },
-        { start: 6.75, end: 7 }, { start: 7.48, end: 7.85 }, { start: 8.5, end: 8.85 },
-        { start: 8.75, end: 9.1 },
-      ],
       set_slap: [{ start: 1.48, end: 1.95 }],
     };
     const fallbackSoundFiles = [
       ...Array.from({ length: 6 }, (_, index) => `clown${index + 1}`),
       "cart",
-      "set_setps",
       "set_slap",
     ];
     if (useFileAudioFallback) {
@@ -1434,9 +1469,15 @@ async function start() {
     const soundFiles = [
       ...Array.from({ length: 6 }, (_, index) => `clown${index + 1}`),
       "cart",
-      "set_setps",
       "set_slap",
     ];
+    const footstepFiles = [1, 2, 3].map((step) => {
+      const audio = new Audio(new URL(`./sounds/steps/step${step}.mp3`, import.meta.url));
+      audio.preload = "auto";
+      audio.load();
+      return audio;
+    });
+    let previousFootstepIndex = -1;
     const soundLoading = new Map();
     const loadSound = (name) => {
       if (soundBuffers.has(name)) return Promise.resolve(soundBuffers.get(name));
@@ -1448,7 +1489,7 @@ async function start() {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
           soundBuffers.set(name, buffer);
-          if (["cart", "set_setps", "set_slap"].includes(name)) {
+          if (["cart", "set_slap"].includes(name)) {
             soundSegments.set(name, detectSoundSegments(buffer));
           }
           return buffer;
@@ -1482,6 +1523,20 @@ async function start() {
       const cursor = fallbackSoundCursor.get(name) || 0;
       fallbackSoundCursor.set(name, cursor + 1);
       return segments[cursor % segments.length];
+    };
+
+    const playFootstep = async () => {
+      if (!document.body.classList.contains("playing")) return;
+      let index = Math.floor(Math.random() * footstepFiles.length);
+      if (footstepFiles.length > 1 && index === previousFootstepIndex) {
+        index = (index + 1 + Math.floor(Math.random() * (footstepFiles.length - 1))) % footstepFiles.length;
+      }
+      previousFootstepIndex = index;
+      const source = footstepFiles[index];
+      const audio = source.paused ? source : source.cloneNode();
+      audio.volume = 0.48;
+      audio.currentTime = 0;
+      audio.play().catch((error) => console.error("Не удалось воспроизвести звук шага:", error));
     };
 
     const startCartRollingSound = async () => {
@@ -1573,7 +1628,7 @@ async function start() {
         audio.pause();
         const previousStopListener = fallbackStopListeners.get(name);
         if (previousStopListener) audio.removeEventListener("timeupdate", previousStopListener);
-        audio.volume = name === "set_setps" ? 0.42 : 0.68;
+        audio.volume = 0.68;
         const play = () => {
           if (segment) audio.currentTime = segment.start;
           audio.play().catch((error) => console.error(`Не удалось воспроизвести звук ${name}:`, error));
@@ -1603,7 +1658,7 @@ async function start() {
       source.buffer = buffer;
       source.connect(gain);
       gain.connect(audioContext.destination);
-      gain.gain.value = name === "set_setps" ? 0.42 : 0.68;
+      gain.gain.value = 0.68;
       if (segment) source.start(0, segment.start, segment.end - segment.start);
       else source.start();
     };
@@ -2094,7 +2149,7 @@ async function start() {
         stepTimer -= delta;
         if (stepTimer <= 0 && !footstepSoundPending) {
           footstepSoundPending = true;
-          void playSound("set_setps").finally(() => { footstepSoundPending = false; });
+          void playFootstep().finally(() => { footstepSoundPending = false; });
           stepTimer = sprintingNow ? 0.32 : 0.44;
         }
       } else {
@@ -2205,10 +2260,19 @@ async function start() {
       intro.style.opacity = "0";
       canvas.classList.add("interactive");
       unlockAudio();
+      ambientMusic.play().catch((error) => console.error("Не удалось запустить фоновую музыку:", error));
       try {
         await canvas.requestPointerLock();
       } catch (error) {
         console.error("Не удалось включить управление мышью:", error);
+      }
+    });
+    musicToggle.addEventListener("click", () => {
+      ambientMusic.muted = !ambientMusic.muted;
+      musicToggle.setAttribute("aria-pressed", String(ambientMusic.muted));
+      musicToggle.setAttribute("aria-label", ambientMusic.muted ? "Включить музыку" : "Отключить музыку");
+      if (!ambientMusic.muted && ambientMusic.paused) {
+        ambientMusic.play().catch((error) => console.error("Не удалось включить фоновую музыку:", error));
       }
     });
     leaveButton.addEventListener("click", stopWalking);

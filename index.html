@@ -23,7 +23,12 @@
         </a>
         <div class="store-status"><span class="live-dot"></span><span>МАГАЗИН ОТКРЫТ</span><i></i><span>24 / 7</span></div>
         <div class="top-note"><span class="top-note-label">СЕЙЧАС</span><span id="clock">03:17</span></div>
+        <button id="musicToggle" class="music-toggle" type="button" aria-label="Отключить музыку" aria-pressed="false">
+          <svg class="music-icon-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9a5 5 0 0 1 0 6M18.5 6.5a9 9 0 0 1 0 11"/></svg>
+          <svg class="music-icon-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="m17 9 5 6m0-6-5 6"/></svg>
+        </button>
       </header>
+      <audio id="ambientMusic" src="./music/xomxomski_dark_ambient_liminal_space_cinematic_music_xomxomski.mp3" loop preload="none"></audio>
 
       <section class="intro" id="intro">
         <div class="eyebrow"><span class="eyebrow-line"></span> СМЕНА № 08 · НОЧНОЙ ЗАЛ</div>
@@ -43,8 +48,19 @@
           <span class="interaction-key">E</span><span id="interactionLabel">Взаимодействовать</span>
         </div>
         <div class="hud-controls"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span>ИДТИ</span><span class="control-divider"></span><span class="keycap keycap-wide">SHIFT</span><span>БЕГ</span><span class="keycap keycap-wide">SPACE</span><span>ПРЫЖОК</span><span class="keycap">E</span><span>ДЕЙСТВИЕ</span><span class="control-divider"></span><span class="mouse-icon">⌖</span><span>ОГЛЯДЕТЬСЯ</span></div>
-        <button id="leave" class="leave-button">Выйти <span>ESC</span></button>
+        <div class="hud-actions">
+          <button id="leave" class="leave-button">Выйти <span>ESC</span></button>
+        </div>
       </div>
+
+      <section class="pause-overlay" id="pauseOverlay" aria-label="Игра на паузе" hidden>
+        <div class="pause-card">
+          <span class="eyebrow"><span class="eyebrow-line"></span> НОЧНОЙ ЗАЛ</span>
+          <h2>Пауза</h2>
+          <button id="resume" class="enter-button" type="button"><span>Продолжить</span><span class="button-arrow">↗</span></button>
+          <p>Нажмите ESC, чтобы вернуться в магазин</p>
+        </div>
+      </section>
 
       <div class="loading" id="loading"><span class="loading-spinner"></span><span>ЗАГРУЖАЕМ НОЧНУЮ СМЕНУ</span></div>
       <div class="webgpu-error" id="webgpuError" hidden>Для этой прогулки нужен браузер с поддержкой WebGPU.</div>

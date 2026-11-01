@@ -71,7 +71,15 @@ h1 em { font-style: normal; color: #e6ca95; }
 .hud-controls > span:nth-child(5) { margin: 0 9px 0 4px; }
 .control-divider { width: 1px; height: 15px; margin: 0 10px; background: rgba(238,244,226,.24); }
 .mouse-icon { font-size: 16px; line-height: 10px; }
-.leave-button { pointer-events: auto; position: absolute; top: 109px; right: 5.2vw; padding: 7px 9px; border: 1px solid rgba(240,243,232,.22); background: rgba(15,21,17,.4); color: rgba(241,245,230,.8); font: 9px var(--mono); cursor: pointer; }
+.hud-actions { position: absolute; top: 109px; right: 5.2vw; display: flex; align-items: center; gap: 7px; pointer-events: auto; }
+.music-toggle, .leave-button { height: 32px; border: 1px solid rgba(240,243,232,.22); background: rgba(15,21,17,.48); color: rgba(241,245,230,.82); cursor: pointer; }
+.music-toggle { width: 34px; display: grid; place-items: center; padding: 6px; }
+.music-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
+.music-icon-off { display: none; }
+.music-toggle[aria-pressed="true"] .music-icon-on { display: none; }
+.music-toggle[aria-pressed="true"] .music-icon-off { display: block; }
+.music-toggle:hover, .leave-button:hover { border-color: rgba(226,201,155,.75); color: #e2c99b; }
+.leave-button { padding: 0 9px; font: 9px var(--mono); }
 .leave-button span { margin-left: 10px; color: rgba(241,245,230,.46); }
 body.playing .intro, body.playing .scene-caption, body.playing .footer { opacity: 0; pointer-events: none; }
 body.playing .topbar { opacity: .44; }
@@ -88,7 +96,7 @@ body.playing .vignette { opacity: .7; }
   .footer { height: 34px; padding: 0 22px; font-size: 7px; }
   .top-note { font-size: 11px; }
   .hud-location { top: 91px; left: 22px; }
-  .leave-button { top: 88px; right: 22px; }
+  .hud-actions { top: 88px; right: 22px; }
   .hud-controls { bottom: 51px; transform: translateX(-50%) scale(.82); transform-origin: center bottom; }
 }
 
