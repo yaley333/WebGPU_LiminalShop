@@ -13,6 +13,16 @@ const musicToggle = document.querySelector("#musicToggle");
 ambientMusic.volume = 0.28;
 const vertexData = [];
 const reflectedVertexData = [];
+const STORE_HALF_WIDTH = 24;
+const STORE_START_Z = 8;
+const STORE_LENGTH = 500;
+const STORE_END_Z = STORE_START_Z - STORE_LENGTH;
+const STORE_SECTION_COUNT = 46;
+const STORE_HALF_LENGTH = STORE_LENGTH / 2;
+const CEILING_HEIGHT = 12.46;
+const AUTONOMOUS_CART_X = 0;
+const AUTONOMOUS_CART_MIN_Z = STORE_END_Z + 30;
+const AUTONOMOUS_CART_MAX_Z = STORE_START_Z - 58;
 let captureReflection = false;
 let activeVertexData = vertexData;
 let geometryTransform = null;
@@ -38,6 +48,8 @@ struct VertexInput {
   @location(4) texCoord: vec2<f32>,
   @location(5) textured: f32,
   @location(6) animation: f32,
+  @location(7) instanceOffset: vec3<f32>,
+  @location(8) instanceYaw: f32,
 };
 
 struct VertexOutput {
@@ -54,9 +66,20 @@ struct VertexOutput {
 @vertex
 fn vertexMain(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
-  var worldPosition = input.position;
+  let localPosition = input.position - vec3<f32>(3.0, 0.0, -10.0);
+  let yawCosine = cos(input.instanceYaw);
+  let yawSine = sin(input.instanceYaw);
+  var worldPosition = vec3<f32>(
+    3.0 + localPosition.x * yawCosine + localPosition.z * yawSine,
+    localPosition.y,
+    -10.0 - localPosition.x * yawSine + localPosition.z * yawCosine,
+  ) + input.instanceOffset;
   worldPosition.y += sin(scene.cameraAndTime.w * 1.15 + input.position.z * 0.23 + input.position.x * 0.19) * 0.16 * max(input.animation, 0.0);
-  var worldNormal = input.normal;
+  var worldNormal = vec3<f32>(
+    input.normal.x * yawCosine + input.normal.z * yawSine,
+    input.normal.y,
+    -input.normal.x * yawSine + input.normal.z * yawCosine,
+  );
   if (scene.renderOptions.x > 0.5) {
     worldPosition.y = -worldPosition.y;
     worldNormal.y = -worldNormal.y;
@@ -724,6 +747,7 @@ function makeScene() {
   const interactiveItems = [];
   const carts = [];
   const movingBalloons = [];
+  const npcColliders = [{ x: 3, z: -10, radius: 0.72 }];
   const toy = { type: "clown", x: 0, z: 1.8, tilt: 0, angularVelocity: 0, radius: 0.72, label: "Неваляшка", active: false };
   const shelfColliders = [];
   const checkoutColliders = [
@@ -731,16 +755,21 @@ function makeScene() {
     { x: 15.5, z: 4.5, halfX: 1.8, halfZ: 0.72 },
   ];
   captureReflection = false;
-  quad([[-22, -0.055, 8], [22, -0.055, 8], [22, -0.055, -242], [-22, -0.055, -242]], [0.43, 0.39, 0.32]);
+  quad([
+    [-STORE_HALF_WIDTH, -0.055, STORE_START_Z],
+    [STORE_HALF_WIDTH, -0.055, STORE_START_Z],
+    [STORE_HALF_WIDTH, -0.055, STORE_END_Z],
+    [-STORE_HALF_WIDTH, -0.055, STORE_END_Z],
+  ], [0.43, 0.39, 0.32]);
   const floorTileColors = [[0.66, 0.59, 0.48], [0.61, 0.55, 0.45], [0.69, 0.62, 0.51], [0.64, 0.57, 0.47]];
-  const floorColumns = 30;
-  const floorRows = 170;
-  const floorTileWidth = 44 / floorColumns;
-  const floorTileDepth = 250 / floorRows;
+  const floorColumns = 33;
+  const floorRows = 340;
+  const floorTileWidth = STORE_HALF_WIDTH * 2 / floorColumns;
+  const floorTileDepth = STORE_LENGTH / floorRows;
   for (let row = 0; row < floorRows; row += 1) {
     for (let column = 0; column < floorColumns; column += 1) {
-      const x = -22 + column * floorTileWidth;
-      const z = 8 - row * floorTileDepth;
+      const x = -STORE_HALF_WIDTH + column * floorTileWidth;
+      const z = STORE_START_Z - row * floorTileDepth;
       const color = floorTileColors[(row * 3 + column * 5) % floorTileColors.length];
       quad([
         [x + 0.012, -0.035, z - 0.012],
@@ -753,29 +782,38 @@ function makeScene() {
   const floorVertexCount = vertexData.length / 16;
 
   const ceilingColors = [[0.62, 0.58, 0.51], [0.57, 0.53, 0.47], [0.65, 0.61, 0.54], [0.6, 0.56, 0.49]];
-  for (let row = 0; row < 125; row += 1) {
-    for (let column = 0; column < 22; column += 1) {
-      const x = -22 + column * 2;
-      const z = 8 - row * 2;
+  for (let row = 0; row < STORE_LENGTH / 2; row += 1) {
+    for (let column = 0; column < STORE_HALF_WIDTH; column += 1) {
+      const x = -STORE_HALF_WIDTH + column * 2;
+      const z = STORE_START_Z - row * 2;
       const color = ceilingColors[(row * 3 + column * 5) % ceilingColors.length];
-      quad([[x + 0.025, 9.46, z - 0.025], [x + 0.025, 9.46, z - 1.975], [x + 1.975, 9.46, z - 1.975], [x + 1.975, 9.46, z - 0.025]], color);
+      quad([
+        [x + 0.025, CEILING_HEIGHT, z - 0.025],
+        [x + 0.025, CEILING_HEIGHT, z - 1.975],
+        [x + 1.975, CEILING_HEIGHT, z - 1.975],
+        [x + 1.975, CEILING_HEIGHT, z - 0.025],
+      ], color);
     }
   }
 
-  box(-22.2, 4.65, -117, 0.4, 9.6, 250, [0.88, 0.85, 0.79]);
-  box(22.2, 4.65, -117, 0.4, 9.6, 250, [0.88, 0.85, 0.79]);
-  for (const endZ of [8.25, -242.25]) {
-    box(0, 4.65, endZ, 44.8, 9.6, 0.5, [0.88, 0.85, 0.79]);
+  const wallHeight = CEILING_HEIGHT + 0.14;
+  const wallCenterY = wallHeight / 2;
+  const wallCenterZ = (STORE_START_Z + STORE_END_Z) / 2;
+  const wallLength = STORE_LENGTH + 0.5;
+  box(-STORE_HALF_WIDTH - 0.2, wallCenterY, wallCenterZ, 0.4, wallHeight, wallLength, [0.88, 0.85, 0.79]);
+  box(STORE_HALF_WIDTH + 0.2, wallCenterY, wallCenterZ, 0.4, wallHeight, wallLength, [0.88, 0.85, 0.79]);
+  for (const endZ of [STORE_START_Z + 0.25, STORE_END_Z - 0.25]) {
+    box(0, wallCenterY, endZ, STORE_HALF_WIDTH * 2 + 0.8, wallHeight, 0.5, [0.88, 0.85, 0.79]);
   }
 
   for (const side of [-1, 1]) {
     const inward = -side;
-    const wallX = side * 21.99;
-    box(wallX, 2.2, -117, 0.12, 0.18, 250, [0.69, 0.1, 0.08]);
-    box(wallX, 2.39, -117, 0.12, 0.035, 250, [0.96, 0.9, 0.81]);
-    for (let mural = 0; mural < 6; mural += 1) {
+    const wallX = side * (STORE_HALF_WIDTH - 0.01);
+    box(wallX, 2.2, wallCenterZ, 0.12, 0.18, STORE_LENGTH, [0.69, 0.1, 0.08]);
+    box(wallX, 2.39, wallCenterZ, 0.12, 0.035, STORE_LENGTH, [0.96, 0.9, 0.81]);
+    for (let mural = 0; mural < 13; mural += 1) {
       const muralZ = -25 - mural * 38;
-      wallGraphic(wallX, inward, 5.95, muralZ, 3.6, 3.2);
+      wallGraphic(wallX, inward, 7.1, muralZ, 3.6, 3.2);
     }
   }
 
@@ -790,10 +828,10 @@ function makeScene() {
   const rackChunks = [];
   const environmentVertexCount = vertexData.length / 16;
   const environmentReflectionVertexCount = reflectedVertexData.length / 16;
-  for (let sectionGroup = 0; sectionGroup < 23; sectionGroup += 3) {
+  for (let sectionGroup = 0; sectionGroup < STORE_SECTION_COUNT; sectionGroup += 3) {
     const vertexStart = vertexData.length / 16;
     const reflectionStart = reflectedVertexData.length / 16;
-    const groupEnd = Math.min(sectionGroup + 3, 23);
+    const groupEnd = Math.min(sectionGroup + 3, STORE_SECTION_COUNT);
     for (let section = sectionGroup; section < groupEnd; section += 1) {
       for (let rackIndex = 0; rackIndex < rackCenters.length; rackIndex += 1) {
       const x = rackCenters[rackIndex];
@@ -906,10 +944,79 @@ function makeScene() {
   toy.vertexEnd = vertexData.length;
   toy.reflectionStart = toyReflectionStart;
   toy.reflectionEnd = reflectedVertexData.length;
-  captureReflection = true;
-  janitor(1.7, -32);
-  captureReflection = false;
-  for (const [x, z, yaw] of [
+  let randomState = 0x24c0ffee;
+  const random = () => {
+    randomState = (randomState * 1664525 + 1013904223) >>> 0;
+    return randomState / 0x100000000;
+  };
+  const crossAisleCenters = [];
+  for (let section = 2; section + 1 < STORE_SECTION_COUNT; section += 3) {
+    const currentZ = -7 - section * 9.35 - Math.floor(section / 3) * 2.6;
+    const nextSection = section + 1;
+    const nextZ = -7 - nextSection * 9.35 - Math.floor(nextSection / 3) * 2.6;
+    crossAisleCenters.push((currentZ + nextZ) / 2);
+  }
+  const janitorLocations = [];
+  const isClearSpawn = (x, z, radius) => {
+    const nearShelf = shelfColliders.some((shelf) =>
+      Math.abs(x - shelf.x) < shelf.halfX + radius
+      && Math.abs(z - shelf.z) < shelf.halfZ + radius);
+    const nearCheckout = checkoutColliders.some((checkout) =>
+      Math.abs(x - checkout.x) < checkout.halfX + radius
+      && Math.abs(z - checkout.z) < checkout.halfZ + radius);
+    const nearNpc = npcColliders.some((npc) =>
+      Math.hypot(x - npc.x, z - npc.z) < radius + npc.radius + 3);
+    const nearJanitor = janitorLocations.some((position) =>
+      Math.hypot(x - position.x, z - position.z) < 7);
+    const blocksCartRoute = Math.abs(x - AUTONOMOUS_CART_X) < 2.4
+      && z > AUTONOMOUS_CART_MIN_Z - 3
+      && z < AUTONOMOUS_CART_MAX_Z + 3;
+    return !nearShelf && !nearCheckout && !nearNpc && !nearJanitor && !blocksCartRoute;
+  };
+  const chooseNpcPlacement = () => {
+    for (let attempt = 0; attempt < 4000; attempt += 1) {
+      const x = -STORE_HALF_WIDTH + 2 + random() * (STORE_HALF_WIDTH * 2 - 4);
+      const z = crossAisleCenters[Math.floor(random() * crossAisleCenters.length)];
+      if (!isClearSpawn(x, z, 0.75)) continue;
+      return { x, z, yaw: random() * Math.PI * 2 };
+    }
+    throw new Error("Не удалось найти свободное место для уборщика.");
+  };
+  for (let janitorIndex = 0; janitorIndex < 25; janitorIndex += 1) {
+    janitorLocations.push(chooseNpcPlacement());
+  }
+  const addJanitor = ({ x, z, yaw }) => {
+    captureReflection = true;
+    const cosine = Math.cos(yaw);
+    const sine = Math.sin(yaw);
+    geometryTransform = (point) => {
+      const localX = point[0] - x;
+      const localZ = point[2] - z;
+      return [
+        x + localX * cosine + localZ * sine,
+        point[1],
+        z - localX * sine + localZ * cosine,
+      ];
+    };
+    geometryNormalTransform = (normal) => [
+      normal[0] * cosine + normal[2] * sine,
+      normal[1],
+      -normal[0] * sine + normal[2] * cosine,
+    ];
+    janitor(x, z);
+    geometryTransform = null;
+    geometryNormalTransform = null;
+    captureReflection = false;
+    npcColliders.push({ x, z, radius: 0.72 });
+  }
+  for (const placement of janitorLocations) addJanitor(placement);
+  const womanPlacements = [{ x: 3, z: -10, yaw: Math.atan2(-3, 16.5) }];
+  for (let womanIndex = 0; womanIndex < 7; womanIndex += 1) {
+    const placement = chooseNpcPlacement();
+    womanPlacements.push(placement);
+    npcColliders.push({ x: placement.x, z: placement.z, radius: 0.72 });
+  }
+  const cartLocations = [
     [-2.7, -8.5, 0.3],
     [-9, -52, -0.3],
     [14.8, -73, 0.55],
@@ -918,47 +1025,97 @@ function makeScene() {
     [8.8, -160, 0.95],
     [-2.7, -185, -0.45],
     [15, -210, 0.38],
-  ]) {
-    const vertexStart = vertexData.length;
-    const reflectionStart = reflectedVertexData.length;
-    captureReflection = true;
-    shoppingCart(x, z, yaw);
-    captureReflection = false;
-    carts.push({
-      type: "cart",
-      x,
-      z,
-      yaw,
-      vx: 0,
-      vz: 0,
-      radius: 0.9,
-      active: false,
-      sourceX: x,
-      sourceZ: z,
-      sourceYaw: yaw,
-      vertexStart,
-      vertexEnd: vertexData.length,
-      reflectionStart,
-      reflectionEnd: reflectedVertexData.length,
-      contents: [],
-    });
+  ];
+  for (const corridorOffset of [0, -STORE_HALF_LENGTH]) {
+    for (const [x, baseZ, yaw] of cartLocations) {
+      const z = baseZ + corridorOffset;
+      const vertexStart = vertexData.length;
+      const reflectionStart = reflectedVertexData.length;
+      captureReflection = true;
+      shoppingCart(x, z, yaw);
+      captureReflection = false;
+      carts.push({
+        type: "cart",
+        x,
+        z,
+        yaw,
+        vx: 0,
+        vz: 0,
+        radius: 0.9,
+        active: false,
+        sourceX: x,
+        sourceZ: z,
+        sourceYaw: yaw,
+        vertexStart,
+        vertexEnd: vertexData.length,
+        reflectionStart,
+        reflectionEnd: reflectedVertexData.length,
+        contents: [],
+      });
+    }
   }
 
-  for (let light = 0; light < 32; light += 1) {
+  const autonomousCart = {
+    type: "cart",
+    x: AUTONOMOUS_CART_X,
+    z: AUTONOMOUS_CART_MAX_Z,
+    yaw: 0,
+    vx: 0,
+    vz: 0,
+    radius: 0.9,
+    active: true,
+    autonomous: true,
+    patrolDirection: -1,
+    sourceX: AUTONOMOUS_CART_X,
+    sourceZ: AUTONOMOUS_CART_MAX_Z,
+    sourceYaw: 0,
+    contents: [],
+  };
+  autonomousCart.vertexStart = vertexData.length;
+  autonomousCart.reflectionStart = reflectedVertexData.length;
+  captureReflection = true;
+  shoppingCart(autonomousCart.x, autonomousCart.z, autonomousCart.yaw);
+  captureReflection = false;
+  autonomousCart.vertexEnd = vertexData.length;
+  autonomousCart.reflectionEnd = reflectedVertexData.length;
+  carts.push(autonomousCart);
+
+  for (let light = 0; light < Math.ceil(STORE_LENGTH / 7.7); light += 1) {
     const z = 4 - light * 7.7;
     for (const x of [-18, -12, -6, 0, 6, 12, 18]) {
       captureReflection = true;
-      box(x, 8.86, z, 1.48, 0.2, 4.35, [0.61, 0.57, 0.49]);
-      box(x, 8.735, z, 1.08, 0.055, 3.82, [0.98, 0.93, 0.8], [0.72, 0.58, 0.4]);
+      box(x, CEILING_HEIGHT - 0.6, z, 1.48, 0.2, 4.35, [0.61, 0.57, 0.49]);
+      box(x, CEILING_HEIGHT - 0.725, z, 1.08, 0.055, 3.82, [0.98, 0.93, 0.8], [0.72, 0.58, 0.4]);
       captureReflection = false;
     }
   }
 
-  const balloonLocations = [
+  const firstCorridorBalloonLocations = [
     [-3.5, -12, [0.87, 0.31, 0.25]], [-2.6, -12.8, [0.18, 0.34, 0.78]], [-1.7, -11.7, [0.91, 0.68, 0.12]],
     [3.2, -45, [0.79, 0.68, 0.39]], [-3.5, -79, [0.45, 0.68, 0.59]], [3.5, -108, [0.84, 0.39, 0.47]],
     [0, -117, [0.82, 0.69, 0.38]], [-18, -147, [0.54, 0.65, 0.79]], [18, -177, [0.82, 0.38, 0.29]],
   ];
+  const balloonLocations = [
+    ...firstCorridorBalloonLocations,
+    ...firstCorridorBalloonLocations.map(([x, z, color]) => [x, z - STORE_HALF_LENGTH, color]),
+  ];
+  const balloonColors = [
+    [0.87, 0.31, 0.25], [0.18, 0.34, 0.78], [0.91, 0.68, 0.12],
+    [0.79, 0.68, 0.39], [0.45, 0.68, 0.59], [0.84, 0.39, 0.47],
+    [0.54, 0.65, 0.79], [0.82, 0.38, 0.29],
+  ];
+  for (let balloonIndex = 0; balloonIndex < 32; balloonIndex += 1) {
+    for (let attempt = 0; attempt < 3000; attempt += 1) {
+      const x = -STORE_HALF_WIDTH + 1.6 + random() * (STORE_HALF_WIDTH * 2 - 3.2);
+      const z = STORE_START_Z - 5 - random() * (STORE_LENGTH - 10);
+      if (!isClearSpawn(x, z, 0.85)) continue;
+      const nearBalloon = balloonLocations.some(([balloonX, balloonZ]) =>
+        Math.hypot(x - balloonX, z - balloonZ) < 5);
+      if (nearBalloon) continue;
+      balloonLocations.push([x, z, balloonColors[Math.floor(random() * balloonColors.length)]]);
+      break;
+    }
+  }
   for (let i = 0; i < balloonLocations.length; i += 1) {
     const [x, z, color] = balloonLocations[i];
     const baseY = 2.65 + (i % 3) * 0.28;
@@ -996,6 +1153,8 @@ function makeScene() {
     toy,
     shelfColliders,
     checkoutColliders,
+    npcColliders,
+    womanPlacements,
     rackChunks,
     environmentVertexCount,
     environmentReflectionVertexCount,
@@ -1025,11 +1184,38 @@ function buildDynamicGeometry(build) {
   }
 }
 
-function hideGeometryRange(device, buffer, source, start, end) {
+function createStaticVertexBuffers(device, source) {
+  const maxBufferSize = 96 * 1024 * 1024;
+  const floatsPerBuffer = Math.floor(maxBufferSize / (16 * Float32Array.BYTES_PER_ELEMENT)) * 16;
+  const buffers = [];
+  for (let floatStart = 0; floatStart < source.length; floatStart += floatsPerBuffer) {
+    const floatEnd = Math.min(floatStart + floatsPerBuffer, source.length);
+    const buffer = device.createBuffer({
+      size: (floatEnd - floatStart) * Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(buffer, 0, source.subarray(floatStart, floatEnd));
+    buffers.push(buffer);
+  }
+  return { buffers, verticesPerBuffer: floatsPerBuffer / 16 };
+}
+
+function hideGeometryRange(device, geometry, source, start, end) {
   if (end <= start) return;
-  const hiddenVertices = source.subarray(start, end);
-  for (let offset = 1; offset < hiddenVertices.length; offset += 16) hiddenVertices[offset] = -100;
-  device.queue.writeBuffer(buffer, start * Float32Array.BYTES_PER_ELEMENT, hiddenVertices);
+  const floatsPerBuffer = geometry.verticesPerBuffer * 16;
+  for (let floatStart = start; floatStart < end;) {
+    const bufferIndex = Math.floor(floatStart / floatsPerBuffer);
+    const bufferFloatStart = bufferIndex * floatsPerBuffer;
+    const floatEnd = Math.min(end, bufferFloatStart + floatsPerBuffer);
+    const hiddenVertices = source.subarray(floatStart, floatEnd);
+    for (let offset = 1; offset < hiddenVertices.length; offset += 16) hiddenVertices[offset] = -100;
+    device.queue.writeBuffer(
+      geometry.buffers[bufferIndex],
+      (floatStart - bufferFloatStart) * Float32Array.BYTES_PER_ELEMENT,
+      hiddenVertices,
+    );
+    floatStart = floatEnd;
+  }
 }
 
 function transformMesh(source, sourcePosition, targetPosition, yaw, scale = 1, output = null, pitch = 0, pivotY = 0) {
@@ -1260,6 +1446,20 @@ async function start() {
     const interactiveItems = sceneGeometry.interactiveItems;
     const carts = sceneGeometry.carts;
     const balloons = sceneGeometry.balloons;
+    const npcColliders = sceneGeometry.npcColliders;
+    const womanPlacements = sceneGeometry.womanPlacements;
+    const womanInstanceOffsets = new Float32Array((womanPlacements.length + 1) * 4);
+    for (let index = 0; index < womanPlacements.length; index += 1) {
+      const offset = (index + 1) * 4;
+      womanInstanceOffsets[offset] = womanPlacements[index].x - 3;
+      womanInstanceOffsets[offset + 2] = womanPlacements[index].z + 10;
+      womanInstanceOffsets[offset + 3] = womanPlacements[index].yaw;
+    }
+    const womanInstanceBuffer = device.createBuffer({
+      size: womanInstanceOffsets.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(womanInstanceBuffer, 0, womanInstanceOffsets);
     const toy = sceneGeometry.toy;
     const shelfColliders = sceneGeometry.shelfColliders;
     const checkoutColliders = sceneGeometry.checkoutColliders;
@@ -1285,8 +1485,7 @@ async function start() {
       }
       bucket.push(item);
     }
-    const vertexBuffer = device.createBuffer({ size: vertices.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
-    device.queue.writeBuffer(vertexBuffer, 0, vertices);
+    const staticGeometry = createStaticVertexBuffers(device, vertices);
     let dynamicVertexCapacity = 1024 * 1024;
     let dynamicVertexData = new Float32Array(dynamicVertexCapacity / Float32Array.BYTES_PER_ELEMENT);
     let dynamicGeometryDirty = true;
@@ -1296,11 +1495,7 @@ async function start() {
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     const reflectionVertices = sceneGeometry.reflectionVertices;
-    const reflectionVertexBuffer = device.createBuffer({
-      size: reflectionVertices.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    });
-    device.queue.writeBuffer(reflectionVertexBuffer, 0, reflectionVertices);
+    const staticReflectionGeometry = createStaticVertexBuffers(device, reflectionVertices);
     const uniformBuffer = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const reflectedUniformBuffer = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const atlas = makeMerchandiseAtlas();
@@ -1339,7 +1534,14 @@ async function start() {
           { shaderLocation: 4, offset: 48, format: "float32x2" },
           { shaderLocation: 5, offset: 56, format: "float32" },
           { shaderLocation: 6, offset: 60, format: "float32" },
-        ] }],
+        ] }, {
+          arrayStride: 16,
+          stepMode: "instance",
+          attributes: [
+            { shaderLocation: 7, offset: 0, format: "float32x3" },
+            { shaderLocation: 8, offset: 12, format: "float32" },
+          ],
+        }],
       },
       fragment: { module: shaderModule, entryPoint: "fragmentMain", targets: [{ format }] },
       primitive: { topology: "triangle-list", cullMode: "none" },
@@ -1358,7 +1560,14 @@ async function start() {
           { shaderLocation: 4, offset: 48, format: "float32x2" },
           { shaderLocation: 5, offset: 56, format: "float32" },
           { shaderLocation: 6, offset: 60, format: "float32" },
-        ] }],
+        ] }, {
+          arrayStride: 16,
+          stepMode: "instance",
+          attributes: [
+            { shaderLocation: 7, offset: 0, format: "float32x3" },
+            { shaderLocation: 8, offset: 12, format: "float32" },
+          ],
+        }],
       },
       fragment: { module: shaderModule, entryPoint: "fragmentMain", targets: [{ format: "rgba8unorm" }] },
       primitive: { topology: "triangle-list", cullMode: "none" },
@@ -1388,17 +1597,24 @@ async function start() {
     let womanVertexBuffer = null;
     let womanIndexBuffer = null;
     let womanIndexCount = 0;
+    let womanInstanceCount = 0;
     let womanTexture = null;
     let womanBindGroup = null;
     let mirroredWomanBindGroup = null;
     const refreshWomanBindGroups = () => {
       if (!womanTexture) return;
+      const sampler = device.createSampler({
+        minFilter: "linear",
+        magFilter: "linear",
+        addressModeU: "repeat",
+        addressModeV: "repeat",
+      });
       womanBindGroup = device.createBindGroup({
         layout: bindGroupLayout,
         entries: [
           { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: womanTexture.createView() },
-          { binding: 2, resource: device.createSampler({ minFilter: "linear", magFilter: "linear", addressModeU: "repeat", addressModeV: "repeat" }) },
+          { binding: 2, resource: sampler },
           { binding: 3, resource: reflectionTexture.createView() },
         ],
       });
@@ -1407,7 +1623,7 @@ async function start() {
         entries: [
           { binding: 0, resource: { buffer: reflectedUniformBuffer } },
           { binding: 1, resource: womanTexture.createView() },
-          { binding: 2, resource: device.createSampler({ minFilter: "linear", magFilter: "linear", addressModeU: "repeat", addressModeV: "repeat" }) },
+          { binding: 2, resource: sampler },
           { binding: 3, resource: emptyReflectionTexture.createView() },
         ],
       });
@@ -1424,6 +1640,7 @@ async function start() {
       });
       device.queue.writeBuffer(womanIndexBuffer, 0, model.indices);
       womanIndexCount = model.indices.length;
+      womanInstanceCount = womanPlacements.length;
       womanTexture = device.createTexture({
         size: [model.texture.width, model.texture.height],
         format: "rgba8unorm-srgb",
@@ -1436,9 +1653,9 @@ async function start() {
       );
       model.texture.close();
       refreshWomanBindGroups();
-      console.info("Второй уборщик загружен из models/woman_clean.glb.");
+      console.info("Загружена модель уборщицы из models/woman_clean.glb.");
     }).catch((error) => {
-      console.error("Не удалось загрузить модель второго уборщика:", error);
+      console.error("Не удалось загрузить модель уборщицы:", error);
     });
 
     const camera = { x: 0, y: 1.72, z: 6.5, yaw: 0, pitch: -0.035 };
@@ -1454,6 +1671,7 @@ async function start() {
     let jumpVelocity = 0;
     let grounded = true;
     let locked = false;
+    let ignoreNextMouseMove = false;
     let previousTime = performance.now();
     let walkTime = 0;
     let runTime = 0;
@@ -1485,14 +1703,27 @@ async function start() {
       refreshWomanBindGroups();
     };
 
-    const drawVisibleScene = (pass, buffer, reflected = false) => {
+    const drawVisibleScene = (pass, geometry, reflected = false) => {
       const environmentCount = reflected
         ? sceneGeometry.environmentReflectionVertexCount
         : sceneGeometry.environmentVertexCount;
       const tailStart = reflected ? sceneGeometry.tailReflectionStart : sceneGeometry.tailVertexStart;
       const totalCount = reflected ? reflectionVertices.length / 16 : vertices.length / 16;
-      pass.setVertexBuffer(0, buffer);
-      if (environmentCount > 0) pass.draw(environmentCount);
+      const drawRange = (rangeStart, rangeCount) => {
+        let start = rangeStart;
+        let remaining = rangeCount;
+        while (remaining > 0) {
+          const bufferIndex = Math.floor(start / geometry.verticesPerBuffer);
+          const bufferVertexStart = bufferIndex * geometry.verticesPerBuffer;
+          const localStart = start - bufferVertexStart;
+          const count = Math.min(remaining, geometry.verticesPerBuffer - localStart);
+          pass.setVertexBuffer(0, geometry.buffers[bufferIndex]);
+          pass.draw(count, 1, localStart);
+          start += count;
+          remaining -= count;
+        }
+      };
+      if (environmentCount > 0) drawRange(0, environmentCount);
       for (const chunk of sceneGeometry.rackChunks) {
         const dx = Math.max(0, Math.abs(camera.x) - 18.5);
         const dz = Math.max(0, Math.abs(camera.z - chunk.centerZ) - 16);
@@ -1500,9 +1731,9 @@ async function start() {
         if (dx * dx + dz * dz > visibilityRadius * visibilityRadius) continue;
         const start = reflected ? chunk.reflectionStart : chunk.vertexStart;
         const count = reflected ? chunk.reflectionCount : chunk.vertexCount;
-        if (count > 0) pass.draw(count, 1, start);
+        if (count > 0) drawRange(start, count);
       }
-      if (totalCount > tailStart) pass.draw(totalCount - tailStart, 1, tailStart);
+      if (totalCount > tailStart) drawRange(tailStart, totalCount - tailStart);
     };
 
     const playerRadius = 0.34;
@@ -1515,6 +1746,10 @@ async function start() {
         if (Math.abs(x - checkout.x) < checkout.halfX + playerRadius
           && Math.abs(z - checkout.z) < checkout.halfZ + playerRadius) return true;
       }
+      for (const npc of npcColliders) {
+        const collisionRadius = npc.radius + playerRadius;
+        if (Math.hypot(x - npc.x, z - npc.z) < collisionRadius) return true;
+      }
       return false;
     };
 
@@ -1523,6 +1758,9 @@ async function start() {
 
     const collidesWithOtherCart = (cart, x, z) => carts.some((other) =>
       other !== cart && Math.hypot(x - other.x, z - other.z) < 1.35);
+
+    const collidesWithNpc = (x, z, radius) => npcColliders.some((npc) =>
+      Math.hypot(x - npc.x, z - npc.z) < radius + npc.radius);
 
     const hideStaticEntity = (entity) => {
       if (entity.hidden) return;
@@ -1536,10 +1774,12 @@ async function start() {
         entity.mesh = vertices.slice(entity.vertexStart, entity.vertexEnd);
         entity.meshPosition = { x: entity.x, y: entity.baseY, z: entity.z };
       }
-      hideGeometryRange(device, vertexBuffer, vertices, entity.vertexStart, entity.vertexEnd);
-      hideGeometryRange(device, reflectionVertexBuffer, reflectionVertices, entity.reflectionStart, entity.reflectionEnd);
+      hideGeometryRange(device, staticGeometry, vertices, entity.vertexStart, entity.vertexEnd);
+      hideGeometryRange(device, staticReflectionGeometry, reflectionVertices, entity.reflectionStart, entity.reflectionEnd);
       entity.hidden = true;
     };
+    const autonomousCart = carts.find((cart) => cart.autonomous);
+    if (autonomousCart) hideStaticEntity(autonomousCart);
 
     const getProductModel = (kind, variant) => {
       const cacheKey = `${kind}:${variant}`;
@@ -1572,9 +1812,9 @@ async function start() {
     };
 
     const useFileAudioFallback = import.meta.url.startsWith("file:");
+    const cartLoopSegment = { start: 23, end: 25 };
     const fallbackAudioSources = new Map();
     const fallbackSoundSegments = {
-      cart: [{ start: 0.33, end: 2.15 }],
       set_slap: [{ start: 1.48, end: 1.95 }],
     };
     const fallbackSoundFiles = [
@@ -1594,7 +1834,9 @@ async function start() {
     let audioContext = null;
     let cartSoundWanted = false;
     let cartAudioSource = null;
+    let cartAudioGainNode = null;
     let cartAudioStarting = false;
+    let cartRollingVolume = 0.16;
     let fallbackCartAudio = null;
     let fallbackCartLoopListener = null;
     let footstepSoundPending = false;
@@ -1676,7 +1918,7 @@ async function start() {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
           soundBuffers.set(name, buffer);
-          if (["cart", "set_slap"].includes(name)) {
+          if (name === "set_slap") {
             soundSegments.set(name, detectSoundSegments(buffer));
           }
           return buffer;
@@ -1731,12 +1973,13 @@ async function start() {
       cartAudioStarting = true;
       if (useFileAudioFallback) {
         const audio = fallbackAudioSources.get("cart");
-        const segment = getSoundSegment("cart", fallbackSoundSegments.cart, true);
+        const segment = cartLoopSegment;
         if (!audio || !segment) {
           cartAudioStarting = false;
           return;
         }
         fallbackCartAudio = audio;
+        audio.volume = cartRollingVolume;
         const startPlayback = () => {
           if (!cartSoundWanted || fallbackCartAudio !== audio) return;
           audio.currentTime = segment.start;
@@ -1764,7 +2007,7 @@ async function start() {
         const [audioUnlocked, buffer] = await Promise.all([unlockAudio(), loadSound("cart")]);
         if (!cartSoundWanted) return;
         if (!audioUnlocked || audioContext.state !== "running") return;
-        const segment = getSoundSegment("cart", soundSegments.get("cart"), true);
+        const segment = cartLoopSegment;
         if (!buffer || !segment) return;
         const source = audioContext.createBufferSource();
         const gain = audioContext.createGain();
@@ -1772,11 +2015,12 @@ async function start() {
         source.loop = true;
         source.loopStart = segment.start;
         source.loopEnd = segment.end;
-        gain.gain.value = 0.68;
+        gain.gain.value = cartRollingVolume;
         source.connect(gain);
         gain.connect(audioContext.destination);
         source.start(0, segment.start);
         cartAudioSource = source;
+        cartAudioGainNode = gain;
       } catch (error) {
         console.error("Не удалось включить звук тележки:", error);
       } finally {
@@ -1784,8 +2028,11 @@ async function start() {
       }
     };
 
-    const updateCartRollingSound = (isMoving) => {
+    const updateCartRollingSound = (isMoving, volume) => {
       cartSoundWanted = isMoving;
+      cartRollingVolume = volume;
+      if (cartAudioGainNode) cartAudioGainNode.gain.value = volume;
+      if (fallbackCartAudio) fallbackCartAudio.volume = volume;
       if (isMoving) {
         void startCartRollingSound();
         return;
@@ -1794,6 +2041,7 @@ async function start() {
         cartAudioSource.stop();
         cartAudioSource.disconnect();
         cartAudioSource = null;
+        cartAudioGainNode = null;
       }
       if (fallbackCartAudio) {
         fallbackCartAudio.pause();
@@ -1815,7 +2063,7 @@ async function start() {
         audio.pause();
         const previousStopListener = fallbackStopListeners.get(name);
         if (previousStopListener) audio.removeEventListener("timeupdate", previousStopListener);
-        audio.volume = 0.68;
+        audio.volume = name === "set_slap" ? 1 : 0.68;
         const play = () => {
           if (segment) audio.currentTime = segment.start;
           audio.play().catch((error) => console.error(`Не удалось воспроизвести звук ${name}:`, error));
@@ -1845,7 +2093,7 @@ async function start() {
       source.buffer = buffer;
       source.connect(gain);
       gain.connect(audioContext.destination);
-      gain.gain.value = 0.68;
+      gain.gain.value = name === "set_slap" ? 1.36 : 0.68;
       if (segment) source.start(0, segment.start, segment.end - segment.start);
       else source.start();
     };
@@ -2039,7 +2287,7 @@ async function start() {
       const cartHalfX = Math.abs(Math.cos(yaw)) * 0.46 + Math.abs(Math.sin(yaw)) * 0.68;
       const cartHalfZ = Math.abs(Math.sin(yaw)) * 0.46 + Math.abs(Math.cos(yaw)) * 0.68;
       for (const rackX of [-18, -12, -6, 6, 12, 18]) {
-        for (let section = 0; section < 23; section += 1) {
+        for (let section = 0; section < STORE_SECTION_COUNT; section += 1) {
           const rackZ = -7 - section * 9.35 - Math.floor(section / 3) * 2.6;
           if (Math.abs(x - rackX) < cartHalfX + 0.57
             && Math.abs(z - rackZ) < cartHalfZ + 4.675) return true;
@@ -2081,9 +2329,11 @@ async function start() {
           balloon.y = balloon.baseY;
           balloon.vy = 0;
         }
-        if (Math.abs(balloon.x) > 20 || Math.abs(balloon.z) > 240) {
-          balloon.x = Math.max(-20, Math.min(20, balloon.x));
-          balloon.z = Math.max(-240, Math.min(7, balloon.z));
+        if (Math.abs(balloon.x) > STORE_HALF_WIDTH - 1.5
+          || balloon.z < STORE_END_Z + 2
+          || balloon.z > STORE_START_Z - 1) {
+          balloon.x = Math.max(-STORE_HALF_WIDTH + 1.5, Math.min(STORE_HALF_WIDTH - 1.5, balloon.x));
+          balloon.z = Math.max(STORE_END_Z + 2, Math.min(STORE_START_Z - 1, balloon.z));
           balloon.vx = 0;
           balloon.vz = 0;
         }
@@ -2099,7 +2349,8 @@ async function start() {
           const nextZ = camera.z + currentForward[2] * 1.35;
           const nextYaw = -camera.yaw;
           if (!cartCollidesWithShelves(cart, nextX, nextZ, nextYaw)
-            && !collidesWithOtherCart(cart, nextX, nextZ)) {
+            && !collidesWithOtherCart(cart, nextX, nextZ)
+            && !collidesWithNpc(nextX, nextZ, cart.radius)) {
             if (Math.abs(cart.x - nextX) > 0.001 || Math.abs(cart.z - nextZ) > 0.001
               || Math.abs(cart.yaw - nextYaw) > 0.001) geometryChanged = true;
             cart.x = nextX;
@@ -2113,13 +2364,35 @@ async function start() {
           }
           continue;
         }
+        if (cart.autonomous) {
+          geometryChanged = true;
+          let direction = cart.patrolDirection;
+          let nextZ = cart.z + direction * 2.1 * delta;
+          if (nextZ <= AUTONOMOUS_CART_MIN_Z || nextZ >= AUTONOMOUS_CART_MAX_Z) {
+            direction *= -1;
+            nextZ = cart.z + direction * 2.1 * delta;
+          }
+          if (!cartCollidesWithShelves(cart, cart.x, nextZ, cart.yaw)
+            && !collidesWithOtherCart(cart, cart.x, nextZ)
+            && !collidesWithNpc(cart.x, nextZ, cart.radius)) {
+            cart.z = nextZ;
+          } else {
+            direction *= -1;
+          }
+          cart.patrolDirection = direction;
+          cart.yaw = direction < 0 ? 0 : Math.PI;
+          continue;
+        }
         if (!cart.active) continue;
         geometryChanged = true;
         const nextX = cart.x + cart.vx * delta;
         const nextZ = cart.z + cart.vz * delta;
-        if (Math.abs(nextX) > 20 || Math.abs(nextZ) > 240
+        if (Math.abs(nextX) > STORE_HALF_WIDTH - 1.5
+          || nextZ < STORE_END_Z + 2
+          || nextZ > STORE_START_Z - 1
           || cartCollidesWithShelves(cart, nextX, nextZ, cart.yaw)
-          || collidesWithOtherCart(cart, nextX, nextZ)) {
+          || collidesWithOtherCart(cart, nextX, nextZ)
+          || collidesWithNpc(nextX, nextZ, cart.radius)) {
           cart.vx = 0;
           cart.vz = 0;
         } else {
@@ -2284,8 +2557,14 @@ async function start() {
       if (moveLength > 0) {
         const stepX = moveX / moveLength * pace * delta;
         const stepZ = moveZ / moveLength * pace * delta;
-        const candidateX = Math.max(-21.55, Math.min(21.55, camera.x + stepX));
-        const candidateZ = Math.max(-241.55, Math.min(7.55, camera.z + stepZ));
+        const candidateX = Math.max(
+          -STORE_HALF_WIDTH + 0.45,
+          Math.min(STORE_HALF_WIDTH - 0.45, camera.x + stepX),
+        );
+        const candidateZ = Math.max(
+          STORE_END_Z + 0.45,
+          Math.min(STORE_START_Z - 0.45, camera.z + stepZ),
+        );
         if (!collidesWithStaticGeometry(candidateX, camera.z) && !collidesWithCart(candidateX, camera.z)) {
           playerMovementX = candidateX - camera.x;
           camera.x = candidateX;
@@ -2309,7 +2588,7 @@ async function start() {
         camera.y + jumpHeight + walkBob + runSwayY,
         camera.z,
       ], forward);
-      const projection = perspective(Math.PI / 3, canvas.width / canvas.height, 0.1, 260);
+      const projection = perspective(Math.PI / 3, canvas.width / canvas.height, 0.1, STORE_LENGTH + 20);
       const uniforms = new Float32Array(24);
       uniforms.set(multiplyMatrices(projection, view), 0);
       uniforms.set([camera.x, camera.y, camera.z, time / 1000], 16);
@@ -2328,10 +2607,11 @@ async function start() {
       previousTime = time;
       updateUniforms(time, delta, true);
       updateInteractiveObjects(delta);
-      const cartIsRolling = carts.some((cart) =>
-        (cart === pushingCart && Math.hypot(playerMovementX, playerMovementZ) > 0.001)
-        || (cart.active && Math.hypot(cart.vx, cart.vz) > 0.15));
-      updateCartRollingSound(cartIsRolling);
+      const playerCartIsRolling = carts.some((cart) =>
+        !cart.autonomous
+        && ((cart === pushingCart && Math.hypot(playerMovementX, playerMovementZ) > 0.001)
+          || (cart.active && Math.hypot(cart.vx, cart.vz) > 0.15)));
+      updateCartRollingSound(playerCartIsRolling, 0.68);
       if (delta > 0 && Math.hypot(playerMovementX, playerMovementZ) > 0.0001) {
         stepTimer -= delta;
         if (stepTimer <= 0 && !footstepSoundPending) {
@@ -2365,13 +2645,16 @@ async function start() {
       });
       reflectionPass.setPipeline(reflectionPipeline);
       reflectionPass.setBindGroup(0, mirroredBindGroup);
-      drawVisibleScene(reflectionPass, reflectionVertexBuffer, true);
+      reflectionPass.setVertexBuffer(1, womanInstanceBuffer, 0, 16);
+      drawVisibleScene(reflectionPass, staticReflectionGeometry, true);
       if (womanIndexCount > 0) {
         reflectionPass.setBindGroup(0, mirroredWomanBindGroup);
         reflectionPass.setVertexBuffer(0, womanVertexBuffer);
+        reflectionPass.setVertexBuffer(1, womanInstanceBuffer, 16, womanInstanceOffsets.byteLength - 16);
         reflectionPass.setIndexBuffer(womanIndexBuffer, "uint16");
-        reflectionPass.drawIndexed(womanIndexCount);
+        reflectionPass.drawIndexed(womanIndexCount, womanInstanceCount);
         reflectionPass.setBindGroup(0, mirroredBindGroup);
+        reflectionPass.setVertexBuffer(1, womanInstanceBuffer, 0, 16);
       }
       if (dynamicVertexCount > 0) {
         reflectionPass.setVertexBuffer(0, dynamicVertexBuffer);
@@ -2395,13 +2678,16 @@ async function start() {
       });
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, bindGroup);
-      drawVisibleScene(pass, vertexBuffer);
+      pass.setVertexBuffer(1, womanInstanceBuffer, 0, 16);
+      drawVisibleScene(pass, staticGeometry);
       if (womanIndexCount > 0) {
         pass.setBindGroup(0, womanBindGroup);
         pass.setVertexBuffer(0, womanVertexBuffer);
+        pass.setVertexBuffer(1, womanInstanceBuffer, 16, womanInstanceOffsets.byteLength - 16);
         pass.setIndexBuffer(womanIndexBuffer, "uint16");
-        pass.drawIndexed(womanIndexCount);
+        pass.drawIndexed(womanIndexCount, womanInstanceCount);
         pass.setBindGroup(0, bindGroup);
+        pass.setVertexBuffer(1, womanInstanceBuffer, 0, 16);
       }
       if (dynamicVertexCount > 0) {
         pass.setVertexBuffer(0, dynamicVertexBuffer);
@@ -2429,11 +2715,16 @@ async function start() {
     window.addEventListener("blur", () => keys.clear());
     document.addEventListener("mousemove", (event) => {
       if (!locked) return;
-      camera.yaw += event.movementX * 0.002;
-      camera.pitch = Math.max(-1.1, Math.min(1.05, camera.pitch - event.movementY * 0.0018));
+      if (ignoreNextMouseMove) {
+        ignoreNextMouseMove = false;
+        return;
+      }
+      camera.yaw += event.movementX * 0.0028;
+      camera.pitch = Math.max(-1.1, Math.min(1.05, camera.pitch - event.movementY * 0.0022));
     });
     document.addEventListener("pointerlockchange", () => {
       locked = document.pointerLockElement === canvas;
+      ignoreNextMouseMove = locked;
       if (!locked && document.body.classList.contains("playing")) stopWalking();
     });
 
