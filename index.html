@@ -32,14 +32,17 @@
         <button class="enter-button" id="enter">
           <span>Войти в магазин</span><span class="button-arrow">↗</span>
         </button>
-        <div class="intro-hint"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span>чтобы осмотреться</span></div>
+        <div class="intro-hint"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span>ходьба · SHIFT — бег · SPACE — прыжок · E — взаимодействие</span></div>
       </section>
 
       <div class="scene-caption" id="caption"><span class="caption-dot"></span> Между рядами кто-то оставил шарик.</div>
       <div class="hud" id="hud">
         <div class="hud-location"><span>ВЫ НАХОДИТЕСЬ</span><b>ОСНОВНОЙ ЗАЛ <i>·</i> РЯД 01</b></div>
         <div class="crosshair" aria-hidden="true"><i></i><b></b></div>
-        <div class="hud-controls"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span>ИДТИ</span><span class="control-divider"></span><span class="mouse-icon">⌖</span><span>ОГЛЯДЕТЬСЯ</span></div>
+        <div class="interaction-hint" id="interactionHint" aria-live="polite">
+          <span class="interaction-key">E</span><span id="interactionLabel">Взаимодействовать</span>
+        </div>
+        <div class="hud-controls"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span>ИДТИ</span><span class="control-divider"></span><span class="keycap keycap-wide">SHIFT</span><span>БЕГ</span><span class="keycap keycap-wide">SPACE</span><span>ПРЫЖОК</span><span class="keycap">E</span><span>ДЕЙСТВИЕ</span><span class="control-divider"></span><span class="mouse-icon">⌖</span><span>ОГЛЯДЕТЬСЯ</span></div>
         <button id="leave" class="leave-button">Выйти <span>ESC</span></button>
       </div>
 
