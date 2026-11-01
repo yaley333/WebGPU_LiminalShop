@@ -1107,6 +1107,136 @@ function multiplyMatrices(a, b) {
   return result;
 }
 
+async function loadWomanModel() {
+  const response = await fetch(new URL("./models/woman_clean.glb", import.meta.url));
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const file = await response.arrayBuffer();
+  const header = new DataView(file);
+  if (header.getUint32(0, true) !== 0x46546c67 || header.getUint32(4, true) !== 2) {
+    throw new Error("Неверный формат GLB.");
+  }
+
+  let offset = 12;
+  let documentData;
+  let binaryOffset = 0;
+  let binaryLength = 0;
+  while (offset < file.byteLength) {
+    const chunkLength = header.getUint32(offset, true);
+    const chunkType = header.getUint32(offset + 4, true);
+    offset += 8;
+    if (chunkType === 0x4e4f534a) {
+      documentData = JSON.parse(new TextDecoder().decode(new Uint8Array(file, offset, chunkLength)));
+    } else if (chunkType === 0x004e4942) {
+      binaryOffset = offset;
+      binaryLength = chunkLength;
+    }
+    offset += chunkLength;
+  }
+  if (!documentData || !binaryLength) throw new Error("В GLB отсутствует геометрия модели.");
+
+  const binary = new DataView(file, binaryOffset, binaryLength);
+  const readAccessor = (accessorIndex) => {
+    const accessor = documentData.accessors[accessorIndex];
+    const view = documentData.bufferViews[accessor.bufferView];
+    const componentCounts = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
+    const componentBytes = { 5121: 1, 5123: 2, 5125: 4, 5126: 4 };
+    const count = componentCounts[accessor.type];
+    const bytes = componentBytes[accessor.componentType];
+    if (!count || !bytes) throw new Error(`Неподдерживаемый тип accessor ${accessor.type}.`);
+    const stride = view.byteStride || count * bytes;
+    const baseOffset = (view.byteOffset || 0) + (accessor.byteOffset || 0);
+    const values = new Array(accessor.count * count);
+    for (let item = 0; item < accessor.count; item += 1) {
+      for (let component = 0; component < count; component += 1) {
+        const address = baseOffset + item * stride + component * bytes;
+        const value = accessor.componentType === 5126 ? binary.getFloat32(address, true)
+          : (accessor.componentType === 5125 ? binary.getUint32(address, true)
+            : (accessor.componentType === 5123 ? binary.getUint16(address, true) : binary.getUint8(address)));
+        values[item * count + component] = accessor.normalized && accessor.componentType === 5123
+          ? value / 65535
+          : value;
+      }
+    }
+    return { values, count: accessor.count };
+  };
+  const rotateByQuaternion = (point, quaternion) => {
+    const [x, y, z] = point;
+    const [qx, qy, qz, qw] = quaternion;
+    const ix = qw * x + qy * z - qz * y;
+    const iy = qw * y + qz * x - qx * z;
+    const iz = qw * z + qx * y - qy * x;
+    const iw = -qx * x - qy * y - qz * z;
+    return [
+      ix * qw + iw * -qx + iy * -qz - iz * -qy,
+      iy * qw + iw * -qy + iz * -qx - ix * -qz,
+      iz * qw + iw * -qz + ix * -qy - iy * -qx,
+    ];
+  };
+
+  const rootNode = documentData.nodes[documentData.scenes[0].nodes[0]];
+  const quaternion = rootNode.rotation || [0, 0, 0, 1];
+  const nodeScale = rootNode.scale || [1, 1, 1];
+  const modelScale = 1.9;
+  const placement = { x: 3, z: -10 };
+  const primitive = documentData.meshes[rootNode.mesh].primitives[0];
+  if (primitive.mode !== undefined && primitive.mode !== 4) {
+    throw new Error("Модель должна содержать треугольную сетку.");
+  }
+  const positions = readAccessor(primitive.attributes.POSITION);
+  const normals = readAccessor(primitive.attributes.NORMAL);
+  const texCoords = readAccessor(primitive.attributes.TEXCOORD_0);
+  const indices = readAccessor(primitive.indices);
+  const transformedPositions = new Float32Array(positions.count * 3);
+  const boundsMin = [Infinity, Infinity, Infinity];
+  const boundsMax = [-Infinity, -Infinity, -Infinity];
+  for (let vertex = 0; vertex < positions.count; vertex += 1) {
+    const source = positions.values.slice(vertex * 3, vertex * 3 + 3);
+    const rotated = rotateByQuaternion(source.map((value, axis) => value * nodeScale[axis]), quaternion);
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value = rotated[axis] * modelScale;
+      transformedPositions[vertex * 3 + axis] = value;
+      boundsMin[axis] = Math.min(boundsMin[axis], value);
+      boundsMax[axis] = Math.max(boundsMax[axis], value);
+    }
+  }
+  const boundsCenterX = (boundsMin[0] + boundsMax[0]) / 2;
+  const boundsCenterZ = (boundsMin[2] + boundsMax[2]) / 2;
+  const vertexData = new Float32Array(positions.count * 16);
+  for (let vertex = 0; vertex < positions.count; vertex += 1) {
+    const positionOffset = vertex * 3;
+    const textureOffset = vertex * 2;
+    const normal = rotateByQuaternion(normals.values.slice(positionOffset, positionOffset + 3), quaternion);
+    const normalLength = Math.hypot(...normal) || 1;
+    const target = vertex * 16;
+    vertexData[target] = placement.x + transformedPositions[positionOffset] - boundsCenterX;
+    vertexData[target + 1] = transformedPositions[positionOffset + 1] - boundsMin[1];
+    vertexData[target + 2] = placement.z + transformedPositions[positionOffset + 2] - boundsCenterZ;
+    vertexData.set([1, 1, 1], target + 3);
+    vertexData.set(normal.map((value) => value / normalLength), target + 6);
+    vertexData[target + 12] = texCoords.values[textureOffset];
+    vertexData[target + 13] = texCoords.values[textureOffset + 1];
+    vertexData[target + 14] = 1;
+  }
+
+  const material = documentData.materials[primitive.material];
+  const baseTextureIndex = material.pbrMetallicRoughness.baseColorTexture.index;
+  const imageIndex = documentData.textures[baseTextureIndex].source;
+  const image = documentData.images[imageIndex];
+  const imageView = documentData.bufferViews[image.bufferView];
+  const imageOffset = binaryOffset + (imageView.byteOffset || 0);
+  const imageBlob = new Blob([file.slice(imageOffset, imageOffset + imageView.byteLength)], { type: image.mimeType });
+  const bitmap = await createImageBitmap(imageBlob, {
+    resizeWidth: 1024,
+    resizeHeight: 1024,
+    resizeQuality: "high",
+  });
+  return {
+    vertices: vertexData,
+    indices: new Uint16Array(indices.values),
+    texture: bitmap,
+  };
+}
+
 async function start() {
   if (!navigator.gpu) {
     loading.classList.add("hidden");
@@ -1123,6 +1253,7 @@ async function start() {
     const context = canvas.getContext("webgpu");
     const format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format, alphaMode: "opaque" });
+    const womanModelLoading = loadWomanModel();
 
     const sceneGeometry = makeScene();
     const vertices = sceneGeometry.vertices;
@@ -1254,6 +1385,61 @@ async function start() {
         { binding: 3, resource: emptyReflectionTexture.createView() },
       ],
     });
+    let womanVertexBuffer = null;
+    let womanIndexBuffer = null;
+    let womanIndexCount = 0;
+    let womanTexture = null;
+    let womanBindGroup = null;
+    let mirroredWomanBindGroup = null;
+    const refreshWomanBindGroups = () => {
+      if (!womanTexture) return;
+      womanBindGroup = device.createBindGroup({
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: womanTexture.createView() },
+          { binding: 2, resource: device.createSampler({ minFilter: "linear", magFilter: "linear", addressModeU: "repeat", addressModeV: "repeat" }) },
+          { binding: 3, resource: reflectionTexture.createView() },
+        ],
+      });
+      mirroredWomanBindGroup = device.createBindGroup({
+        layout: reflectedBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: reflectedUniformBuffer } },
+          { binding: 1, resource: womanTexture.createView() },
+          { binding: 2, resource: device.createSampler({ minFilter: "linear", magFilter: "linear", addressModeU: "repeat", addressModeV: "repeat" }) },
+          { binding: 3, resource: emptyReflectionTexture.createView() },
+        ],
+      });
+    };
+    void womanModelLoading.then((model) => {
+      womanVertexBuffer = device.createBuffer({
+        size: model.vertices.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(womanVertexBuffer, 0, model.vertices);
+      womanIndexBuffer = device.createBuffer({
+        size: model.indices.byteLength,
+        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(womanIndexBuffer, 0, model.indices);
+      womanIndexCount = model.indices.length;
+      womanTexture = device.createTexture({
+        size: [model.texture.width, model.texture.height],
+        format: "rgba8unorm-srgb",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      device.queue.copyExternalImageToTexture(
+        { source: model.texture },
+        { texture: womanTexture },
+        [model.texture.width, model.texture.height],
+      );
+      model.texture.close();
+      refreshWomanBindGroups();
+      console.info("Второй уборщик загружен из models/woman_clean.glb.");
+    }).catch((error) => {
+      console.error("Не удалось загрузить модель второго уборщика:", error);
+    });
 
     const camera = { x: 0, y: 1.72, z: 6.5, yaw: 0, pitch: -0.035 };
     const keys = new Set();
@@ -1296,6 +1482,7 @@ async function start() {
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
       });
       bindGroup = createBindGroup(reflectionTexture.createView());
+      refreshWomanBindGroups();
     };
 
     const drawVisibleScene = (pass, buffer, reflected = false) => {
@@ -2179,6 +2366,13 @@ async function start() {
       reflectionPass.setPipeline(reflectionPipeline);
       reflectionPass.setBindGroup(0, mirroredBindGroup);
       drawVisibleScene(reflectionPass, reflectionVertexBuffer, true);
+      if (womanIndexCount > 0) {
+        reflectionPass.setBindGroup(0, mirroredWomanBindGroup);
+        reflectionPass.setVertexBuffer(0, womanVertexBuffer);
+        reflectionPass.setIndexBuffer(womanIndexBuffer, "uint16");
+        reflectionPass.drawIndexed(womanIndexCount);
+        reflectionPass.setBindGroup(0, mirroredBindGroup);
+      }
       if (dynamicVertexCount > 0) {
         reflectionPass.setVertexBuffer(0, dynamicVertexBuffer);
         reflectionPass.draw(dynamicVertexCount);
@@ -2202,6 +2396,13 @@ async function start() {
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, bindGroup);
       drawVisibleScene(pass, vertexBuffer);
+      if (womanIndexCount > 0) {
+        pass.setBindGroup(0, womanBindGroup);
+        pass.setVertexBuffer(0, womanVertexBuffer);
+        pass.setIndexBuffer(womanIndexBuffer, "uint16");
+        pass.drawIndexed(womanIndexCount);
+        pass.setBindGroup(0, bindGroup);
+      }
       if (dynamicVertexCount > 0) {
         pass.setVertexBuffer(0, dynamicVertexBuffer);
         pass.draw(dynamicVertexCount);
